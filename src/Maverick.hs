@@ -4,44 +4,41 @@
 module Maverick (printEquityTable) where
 
 import Data.Text qualified as T
-import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Maverick.Score (score)
 import Maverick.Types
 import Numeric (showFFloat)
-import Relude.Extra.Foldable (average)
-import Relude.Extra.Foldable1 (Foldable1 (maximum1))
 import System.Random.MWC (GenIO, createSystemRandom)
 import System.Random.MWC.Distributions (uniformShuffle)
 
-hands :: [[Card]]
+hands :: V.Vector (V.Vector Card)
 hands =
-  fmap
-    (fmap (uncurry card))
-    [ [(Ace, Spade), (Ace, Heart)],
-      [(King, Spade), (King, Heart)],
-      [(Queen, Spade), (Queen, Heart)],
-      [(Jack, Spade), (Jack, Heart)],
-      [(Ten, Spade), (Ten, Heart)],
-      [(Ace, Spade), (King, Spade)],
-      [(Ace, Spade), (King, Heart)],
-      [(Two, Spade), (Two, Heart)],
-      [(Two, Spade), (Seven, Heart)]
-    ]
+  V.fromList $
+    fmap
+      (V.fromList . fmap (uncurry card))
+      [ [(Ace, Spade), (Ace, Heart)],
+        [(King, Spade), (King, Heart)],
+        [(Queen, Spade), (Queen, Heart)],
+        [(Jack, Spade), (Jack, Heart)],
+        [(Ten, Spade), (Ten, Heart)],
+        [(Ace, Spade), (King, Spade)],
+        [(Ace, Spade), (King, Heart)],
+        [(Two, Spade), (Two, Heart)],
+        [(Two, Spade), (Seven, Heart)]
+      ]
 
-deck :: Vector Card
+deck :: V.Vector Card
 deck = V.fromList $ do
   suit <- universe
   rank <- universe
   pure (card rank suit)
 
-type EquityIO = StateT (Vector Card) (ReaderT GenIO IO)
+type EquityIO = StateT (V.Vector Card) (ReaderT GenIO IO)
 
-deal :: Int -> EquityIO (Vector Card)
+deal :: Int -> EquityIO (V.Vector Card)
 deal n = do
-  v <- get
-  let (h, t) = V.splitAt n v
-  put t
+  h <- V.unsafeTake n <$> get
+  modify' (V.unsafeDrop n)
   pure h
 
 shuffle :: EquityIO ()
@@ -54,24 +51,32 @@ shuffle = do
 playHand :: Hand -> Int -> EquityIO Double
 playHand p n = do
   shuffle
-  ps <- foldMap' hand <<$>> replicateM n (deal 2)
+  ps <- V.foldMap' hand <<$>> V.replicateM n (deal 2)
   cs <- deal 5
-  let community = foldMap' hand cs
-  let hs = (community <>) <$> (p :| ps)
-      ss@(s :| _) = score <$> hs
-      best = maximum1 ss
+  let community = V.foldMap' hand cs
+  let s = score $ community <> p
+      ss = score . (community <>) <$> ps
+      best = max s (V.maximum ss)
   if s == best
-    then pure (1 / countEqual best ss)
+    then pure (1 / (1 + countEqual best ss))
     else pure 0
   where
-    countEqual x = getSum . foldMap' (\y -> if x == y then 1 else 0)
+    countEqual x = getSum . V.foldMap' (\y -> if x == y then 1 else 0)
 
-calcEquity :: [Card] -> Int -> ReaderT GenIO IO Double
+calcEquity :: V.Vector Card -> Int -> ReaderT GenIO IO Double
 calcEquity cs n = do
   let deck' = V.filter (`notElem` cs) deck
-      p = foldMap' hand cs
-  fromMaybe 0 . average
-    <$> replicateM 10000 (evaluatingStateT deck' $ playHand p n)
+      p = V.foldMap' hand cs
+      m = 10000
+  (/ fromIntegral m) . getSum
+    <$> timesM m (Sum <$> evaluatingStateT deck' (playHand p n))
+
+timesM :: (Monoid m, Monad f) => Int -> f m -> f m
+timesM cnt0 x = loop cnt0 mempty
+  where
+    loop !cnt !acc
+      | cnt <= 0 = pure acc
+      | otherwise = (acc <>) <$> x >>= loop (cnt - 1)
 
 printEquityTable :: IO ()
 printEquityTable = do
@@ -80,6 +85,6 @@ printEquityTable = do
   usingReaderT gen $ do
     for_ hands $ \pocket -> do
       es <- traverse (calcEquity pocket) [1 .. 9]
-      putText (T.intercalate " " (render <$> pocket))
+      putText (T.intercalate " " (V.toList $ render <$> pocket))
       putText " | "
       putTextLn (T.intercalate " " (toText . (flip (showFFloat (Just 2)) "") <$> es))

@@ -56,9 +56,8 @@ findFlush h =
     <$> find (\s -> getSuitCount s h.handSuitCount >= 5) universe
 
 findStraight :: RankSet -> Maybe Int
-findStraight (RankSet s) = find (\r -> foo r == straightMask) [9, 8 .. 0]
-  where
-    foo r = (s `shiftR` r) .&. straightMask
+findStraight (RankSet s) =
+  find (\r -> (s `shiftR` r) .&. straightMask == straightMask) [9, 8 .. 0]
 
 countDups :: Hand -> Dups
 countDups h =

@@ -32,13 +32,13 @@ data Rank
 newtype RankSet = RankSet Word
   deriving (Eq, Ord, Bits, FiniteBits)
 
-newtype RankCount = RankCount Word
+newtype RankCount = RankCount {unRankCount :: Word}
   deriving (Eq, Ord, Bits, FiniteBits)
 
-newtype SuitSet = SuitSet Word
+newtype SuitSet = SuitSet {unSuitSet :: Word}
   deriving (Eq, Ord, Bits, FiniteBits)
 
-newtype SuitCount = SuitCount Word
+newtype SuitCount = SuitCount {unSuitCount :: Word}
   deriving (Eq, Ord, Bits, FiniteBits)
 
 instance Show RankSet where
@@ -73,16 +73,13 @@ data Hand = Hand
   }
   deriving (Show, Eq, Ord)
 
--- rankSet :: Rank -> RankSet
--- rankSet Ace = RankSet (1 `shiftL` 13 + 1)
--- rankSet r = RankSet (2 `shiftL` fromEnum r)
--- {-# INLINE rankSet #-}
-
 setMask :: SuitSet
 setMask = SuitSet 0b11111111111111
+{-# INLINE setMask #-}
 
 countMask :: Word
 countMask = 0xf
+{-# INLINE countMask #-}
 
 rankSet :: SuitSet -> RankSet
 rankSet s =
