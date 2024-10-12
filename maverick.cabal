@@ -35,7 +35,7 @@ library
             , relude
     hs-source-dirs:   src
     default-language: GHC2024
-    ghc-options: -fprof-late -O2
+    ghc-options: -fprof-late
 
 executable maverick
     import:           warnings
@@ -50,7 +50,7 @@ executable maverick
             , relude
     hs-source-dirs:   app
     default-language: GHC2024
-    ghc-options: -fprof-late -rtsopts -O2
+    ghc-options: -rtsopts -fprof-late
 
 test-suite maverick-test
     import:           warnings

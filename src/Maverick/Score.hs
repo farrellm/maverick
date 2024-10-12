@@ -53,7 +53,7 @@ straightMask = 0b11111
 findFlush :: Hand -> Maybe RankSet
 findFlush h =
   (`getSuitRankSet` h.handSuitSet)
-    <$> find (\s -> getSuitCount s h.handSuitCount >= 5) universe
+    <$> find (\s -> getSuitCount' s h.handCount >= 5) universe
 
 findStraight :: RankSet -> Maybe Int
 findStraight (RankSet s) =
@@ -64,7 +64,7 @@ countDups h =
   foldl' go (Dups Nothing [] []) universe
   where
     go :: Dups -> Rank -> Dups
-    go d r = case getRankCount r h.handRankCount of
+    go d r = case getRankCount r (comboRankCount h.handCount) of
       4 -> d {q = Just r}
       3 -> d {t = r : t d}
       2 -> d {p = r : p d}
@@ -72,6 +72,8 @@ countDups h =
 
 clearLSB :: (FiniteBits b) => b -> b
 clearLSB b = clearBit b (countTrailingZeros b)
+{-# INLINE clearLSB #-}
 
-clearTo :: (Show a, FiniteBits a) => Int -> a -> a
+clearTo :: (FiniteBits a) => Int -> a -> a
 clearTo n b = foldl' (\x _ -> clearLSB x) b [n + 1 .. popCount b]
+{-# INLINE clearTo #-}

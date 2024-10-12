@@ -3,11 +3,11 @@
 
 module Maverick.Types where
 
-import Data.Bits (Bits (shiftL, shiftR, (.&.), (.|.)), FiniteBits)
+import Data.Bits (Bits (unsafeShiftL, unsafeShiftR, (.&.), (.|.)), FiniteBits)
 import Data.Char (intToDigit)
 import Data.Text qualified as T
 import GHC.Show (showParen, showString)
-import Numeric (showHex, showIntAtBase)
+import Numeric (showHex, showIntAtBase, showOct)
 import Text.Show (Show (showsPrec))
 
 data Suit = Club | Diamond | Heart | Spade
@@ -41,6 +41,9 @@ newtype SuitSet = SuitSet {unSuitSet :: Word}
 newtype SuitCount = SuitCount {unSuitCount :: Word}
   deriving (Eq, Ord, Bits, FiniteBits)
 
+newtype ComboCount = ComboCount {unComboCount :: Word}
+  deriving (Eq, Ord, Bits, FiniteBits)
+
 instance Show RankSet where
   showsPrec d r =
     showParen (d > 10) $ showString "RankSet 0b" . ((toString (render r)) ++)
@@ -57,19 +60,21 @@ instance Show SuitCount where
   showsPrec d r =
     showParen (d > 10) $ showString "SuitCount 0x" . ((toString (render r)) ++)
 
+instance Show ComboCount where
+  showsPrec d (ComboCount r) =
+    showParen (d > 10) $ showString "ComboCount 0x" . showHex r
+
 data Card = Card
   { cardRank :: !Rank,
     cardSuit :: !Suit,
-    cardRankCount :: !RankCount,
-    cardSuitSet :: !SuitSet,
-    cardSuitCount :: !SuitCount
+    cardCount :: !ComboCount,
+    cardSuitSet :: !SuitSet
   }
   deriving (Show, Eq, Ord)
 
 data Hand = Hand
-  { handRankCount :: !RankCount,
-    handSuitSet :: !SuitSet,
-    handSuitCount :: !SuitCount
+  { handCount :: !ComboCount,
+    handSuitSet :: !SuitSet
   }
   deriving (Show, Eq, Ord)
 
@@ -77,52 +82,79 @@ setMask :: SuitSet
 setMask = SuitSet 0b11111111111111
 {-# INLINE setMask #-}
 
-countMask :: Word
-countMask = 0xf
-{-# INLINE countMask #-}
+suitCountMask :: Word
+suitCountMask = 0xf
+{-# INLINE suitCountMask #-}
+
+rankCountMask :: Word
+rankCountMask = 0x7
+{-# INLINE rankCountMask #-}
 
 rankSet :: SuitSet -> RankSet
 rankSet s =
-  let SuitSet r =
-        ( (setMask .&. s)
-            .|. (setMask .&. (s `shiftR` 14))
-            .|. (setMask .&. (s `shiftR` 28))
-            .|. (setMask .&. (s `shiftR` 42))
-        )
-   in RankSet r
+  coerce $
+    setMask
+      .&. ( s
+              .|. (s `unsafeShiftR` 14)
+              .|. (s `unsafeShiftR` 28)
+              .|. (s `unsafeShiftR` 42)
+          )
 {-# INLINE rankSet #-}
 
 getRankCount :: Rank -> RankCount -> Word
-getRankCount r (RankCount s) = countMask .&. (s `shiftR` (fromEnum r * 4))
+getRankCount r (RankCount s) = rankCountMask .&. (s `unsafeShiftR` (fromEnum r * 3))
 {-# INLINE getRankCount #-}
 
 getSuitCount :: Suit -> SuitCount -> Word
-getSuitCount r (SuitCount s) = countMask .&. (s `shiftR` (fromEnum r * 4))
+getSuitCount r (SuitCount s) = suitCountMask .&. (s `unsafeShiftR` (fromEnum r * 4))
 {-# INLINE getSuitCount #-}
 
+getRankCount' :: Rank -> ComboCount -> Word
+getRankCount' r = getRankCount r . coerce
+{-# INLINE getRankCount' #-}
+
+getSuitCount' :: Suit -> ComboCount -> Word
+getSuitCount' r s = suitCountMask .&. (coerce s `unsafeShiftR` (fromEnum r * 4 + 39))
+{-# INLINE getSuitCount' #-}
+
 getSuitRankSet :: Suit -> SuitSet -> RankSet
-getSuitRankSet s r = coerce $ (r `shiftR` (fromEnum s * 14)) .&. setMask
+getSuitRankSet s r = coerce $ (r `unsafeShiftR` (fromEnum s * 14)) .&. setMask
 {-# INLINE getSuitRankSet #-}
 
 rankCount :: Rank -> RankCount
-rankCount r = RankCount (1 `shiftL` (4 * fromEnum r))
+rankCount r = RankCount (1 `unsafeShiftL` (3 * fromEnum r))
 {-# INLINE rankCount #-}
 
 suitSet :: Rank -> Suit -> SuitSet
-suitSet Ace s = SuitSet ((1 `shiftL` 13 + 1) `shiftL` (14 * fromEnum s))
-suitSet r s = SuitSet ((2 `shiftL` fromEnum r) `shiftL` (14 * fromEnum s))
+suitSet Ace s = SuitSet ((1 `unsafeShiftL` 13 + 1) `unsafeShiftL` (14 * fromEnum s))
+suitSet r s = SuitSet ((2 `unsafeShiftL` fromEnum r) `unsafeShiftL` (14 * fromEnum s))
 {-# INLINE suitSet #-}
 
 suitCount :: Suit -> SuitCount
-suitCount r = SuitCount (1 `shiftL` (4 * fromEnum r))
+suitCount r = SuitCount (1 `unsafeShiftL` (4 * fromEnum r))
 {-# INLINE suitCount #-}
 
+comboCount :: Rank -> Suit -> ComboCount
+comboCount r s =
+  let RankCount r' = rankCount r
+      SuitCount s' = suitCount s
+   in ComboCount $ (s' `unsafeShiftL` 39) .|. r'
+{-# INLINE comboCount #-}
+
+comboRankCount :: ComboCount -> RankCount
+comboRankCount (ComboCount cc) = RankCount (0o7777777777777 .&. cc)
+{-# INLINE comboRankCount #-}
+
+comboSuitCount :: ComboCount -> SuitCount
+comboSuitCount (ComboCount cc) = SuitCount (cc `unsafeShiftR` 39)
+{-# INLINE comboSuitCount #-}
+
 card :: Rank -> Suit -> Card
-card r s = Card r s (rankCount r) (suitSet r s) (suitCount s)
+card r s = Card r s (comboCount r s) (suitSet r s)
 {-# INLINE card #-}
 
 hand :: Card -> Hand
-hand c = Hand c.cardRankCount c.cardSuitSet c.cardSuitCount
+hand c = Hand c.cardCount c.cardSuitSet
 {-# INLINE hand #-}
 
 class Render a where
@@ -155,7 +187,7 @@ instance Render RankSet where
 
 instance Render RankCount where
   render (RankCount s) =
-    T.justifyRight 13 '0' . toText $ showHex s ""
+    T.justifyRight 13 '0' . toText $ showOct s ""
 
 instance Render SuitSet where
   render (SuitSet r) =
@@ -171,16 +203,27 @@ instance Render SuitCount where
       . toText
       $ showHex s ""
 
+instance Render ComboCount where
+  render cc =
+    T.intercalate
+      " "
+      [ --  toText (showHex (un cc :: Word) ""),
+        render (comboSuitCount cc),
+        render (comboRankCount cc)
+      ]
+
 instance Render Card where
   render c =
     -- T.intercalate
     --   " "
-    --   [render r <> render s, render rs, render rc, render sc]
+    --   [ render c.cardRank <> render c.cardSuit,
+    --     render c.cardCount,
+    --     render c.cardSuitSet
+    --   ]
     render c.cardRank <> render c.cardSuit
 
 instance Render Hand where
-  render (Hand rs rc sc) =
-    T.intercalate " " [render rs, render rc, render sc]
+  render (Hand cc rs) = T.intercalate " " [render cc, render rs]
 
 instance Semigroup RankSet where
   RankSet r <> RankSet r' = RankSet (r .|. r')
@@ -198,8 +241,12 @@ instance Semigroup SuitCount where
   SuitCount r <> SuitCount r' = SuitCount (r + r')
   {-# INLINE (<>) #-}
 
+instance Semigroup ComboCount where
+  ComboCount r <> ComboCount r' = ComboCount (r + r')
+  {-# INLINE (<>) #-}
+
 instance Semigroup Hand where
-  (Hand r c s) <> (Hand r' c' s') = Hand (r <> r') (c <> c') (s <> s')
+  (Hand r c) <> (Hand r' c') = Hand (r <> r') (c <> c')
   {-# INLINE (<>) #-}
 
 instance Monoid RankSet where
@@ -218,17 +265,21 @@ instance Monoid SuitCount where
   mempty = SuitCount 0
   {-# INLINE mempty #-}
 
+instance Monoid ComboCount where
+  mempty = ComboCount 0
+  {-# INLINE mempty #-}
+
 instance Monoid Hand where
-  mempty = Hand mempty mempty mempty
+  mempty = Hand mempty mempty
   {-# INLINE mempty #-}
 
 (<+) :: Hand -> Card -> Hand
-(<+) h c =
-  Hand
-    (h.handRankCount <> c.cardRankCount)
-    (h.handSuitSet <> c.cardSuitSet)
-    (h.handSuitCount <> c.cardSuitCount)
+(<+) h c = Hand (h.handCount <> c.cardCount) (h.handSuitSet <> c.cardSuitSet)
 {-# INLINE (<+) #-}
+
+(<+^) :: (Applicative f) => f Hand -> f Card -> f Hand
+(<+^) = liftA2 (<+)
+{-# INLINE (<+^) #-}
 
 data Score
   = High RankSet

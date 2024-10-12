@@ -1,2 +1,3 @@
 packages: *.cabal
 with-compiler: /home/farrellm/.ghcup/bin/ghc-9.10
+optimization: 2
