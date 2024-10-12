@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Maverick (printEquityTable) where
@@ -96,7 +95,7 @@ timesM cnt0 x = loop cnt0 mempty
   where
     loop !cnt !acc
       | cnt <= 0 = pure acc
-      | otherwise = (acc <>) <$> x >>= loop (cnt - 1)
+      | otherwise = x >>= loop (cnt - 1) . (acc <>)
 
 printEquityTable :: IO ()
 printEquityTable = do
@@ -107,4 +106,4 @@ printEquityTable = do
       es <- traverse (calcEquity pocket) [1 .. 9]
       putText (T.intercalate " " (V.toList $ render <$> pocket))
       putText " | "
-      putTextLn (T.intercalate " " (toText . (flip (showFFloat (Just 2)) "") <$> es))
+      putTextLn (T.intercalate " " (toText . flip (showFFloat (Just 2)) "" <$> es))

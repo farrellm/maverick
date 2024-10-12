@@ -46,19 +46,19 @@ newtype ComboCount = ComboCount {unComboCount :: Word}
 
 instance Show RankSet where
   showsPrec d r =
-    showParen (d > 10) $ showString "RankSet 0b" . ((toString (render r)) ++)
+    showParen (d > 10) $ showString "RankSet 0b" . (toString (render r) ++)
 
 instance Show RankCount where
   showsPrec d r =
-    showParen (d > 10) $ showString "RankCount 0x" . ((toString (render r)) ++)
+    showParen (d > 10) $ showString "RankCount 0x" . (toString (render r) ++)
 
 instance Show SuitSet where
   showsPrec d r =
-    showParen (d > 10) $ showString "SuitSet 0b" . ((toString (render r)) ++)
+    showParen (d > 10) $ showString "SuitSet 0b" . (toString (render r) ++)
 
 instance Show SuitCount where
   showsPrec d r =
-    showParen (d > 10) $ showString "SuitCount 0x" . ((toString (render r)) ++)
+    showParen (d > 10) $ showString "SuitCount 0x" . (toString (render r) ++)
 
 instance Show ComboCount where
   showsPrec d (ComboCount r) =
