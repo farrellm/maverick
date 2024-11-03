@@ -29,6 +29,7 @@ library
                     , random
                     , relude
                     , text
+                    , transformers
                     , vector
     mixins:   base hiding (Prelude)
             , relude (Relude as Prelude)

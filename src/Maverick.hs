@@ -6,6 +6,7 @@ module Maverick
   )
 where
 
+import Control.Monad.Trans.RWS.CPS (RWST, ask, get, put, runRWST, tell)
 import Data.Text qualified as T
 import Data.Vector qualified as V
 import Data.Vector.Mutable (IOVector)
@@ -14,6 +15,7 @@ import Maverick.Score (score)
 import Maverick.Types
 import Numeric (showFFloat)
 import System.Random.MWC (GenIO, UniformRange (uniformRM), createSystemRandom)
+import Prelude hiding (ask, get, put)
 
 (<>^) :: (Monoid m, Applicative f) => f m -> f m -> f m
 (<>^) = liftA2 (<>)
@@ -41,7 +43,7 @@ deck = V.fromList $ do
   rank <- universe
   pure (hand $ card rank suit)
 
-type EquityIO = StateT Int (ReaderT (GenIO, IOVector Hand) IO)
+type EquityIO = RWST (GenIO, IOVector Hand) (Sum Double) Int IO
 
 drawCommunity :: EquityIO Hand
 drawCommunity = do
@@ -67,8 +69,9 @@ drawHand c = do
   VM.unsafeSwap d (i + 1) =<< uniformRM (i + 1, VM.length d - 1) gen
   score <$!> (pure c <>^ VM.unsafeRead d i <>^ VM.unsafeRead d (i + 1))
 
-playHand :: Hand -> Int -> EquityIO Double
+playHand :: Hand -> Int -> EquityIO ()
 playHand p n = do
+  put 0
   community <- drawCommunity
   ss <- V.replicateM n $ drawHand community
   let !s = score $ community <> p
@@ -77,56 +80,40 @@ playHand p n = do
         if s == best
           then 1 / (1 + countEqual best ss)
           else 0
-  x `seq` pure x
+  x `seq` tell (Sum x)
   where
-    countEqual x = getSum . V.foldMap' (\y -> if x == y then 1 else 0)
+    countEqual x = V.foldl' (\a y -> if x == y then a + 1 else a) 0
 
-calcEquity :: V.Vector Card -> Int -> ReaderT GenIO IO Double
-calcEquity cs n = do
-  gen <- ask
+calcEquity :: GenIO -> V.Vector Card -> Int -> IO Double
+calcEquity gen cs n = do
   let hs = hand <$> cs
   deck' <- V.thaw $ V.filter (`notElem` hs) deck
   let p = V.foldMap' hand cs
-      m = 10000
-  liftIO $
-    (/ fromIntegral m) . getSum
-      <$> timesM
-        m
-        (Sum <$> (usingReaderT (gen, deck') . evaluatingStateT 0 $ playHand p n))
-
-timesM :: (Monoid m, Monad f) => Int -> f m -> f m
-timesM cnt0 x = loop cnt0 mempty
-  where
-    loop cnt acc
-      | cnt <= 0 = pure acc
-      | otherwise = do
-          let cnt' = cnt - 1
-          x' <- (acc <>) <$> x
-          cnt' `seq` x' `seq` loop cnt' x'
+      m = 100000
+  (_, _, s) <- runRWST (replicateM_ m $ playHand p n) (gen, deck') 0
+  pure $ getSum s / fromIntegral m
 
 printEquityTable' :: IO ()
 printEquityTable' = do
   putStrLn "maverick"
   gen <- createSystemRandom
-  usingReaderT gen $ do
-    for_ hands $ \pocket -> do
-      es <- traverse (calcEquity pocket) [1 .. 9]
-      putText (T.intercalate " " (V.toList $ render <$> pocket))
-      putText " | "
-      putTextLn (T.intercalate " " (toText . flip (showFFloat (Just 2)) "" <$> es))
+  for_ hands $ \pocket -> do
+    es <- traverse (calcEquity gen pocket) [1 .. 9]
+    putText (T.intercalate " " (V.toList $ render <$> pocket))
+    putText " | "
+    putTextLn (T.intercalate " " (toText . flip (showFFloat (Just 2)) "" <$> es))
 
 printEquityTable :: IO ()
 printEquityTable = do
   putStrLn "maverick"
   gen <- createSystemRandom
-  usingReaderT gen $ do
-    let c2s = (`card` Heart) <$> universe
-    putTextLn (T.intercalate "   " $ "   |" : (render <$> c2s))
-    for_ universe $ \r1 -> do
-      let c1 = card r1 Spade
-      es <- forM c2s $ \c2 -> do
-        let pocket = V.fromList [c1, c2]
-        calcEquity pocket 7
-      putText (render c1)
-      putText " | "
-      putTextLn (T.intercalate " " (toText . flip (showFFloat (Just 2)) "" <$> es))
+  let c2s = (`card` Heart) <$> universe
+  putTextLn (T.intercalate "   " $ "   |" : (render <$> c2s))
+  for_ universe $ \r1 -> do
+    let c1 = card r1 Spade
+    es <- forM c2s $ \c2 -> do
+      let pocket = V.fromList [c1, c2]
+      calcEquity gen pocket 7
+    putText (render c1)
+    putText " | "
+    putTextLn (T.intercalate " " (toText . flip (showFFloat (Just 2)) "" <$> es))
