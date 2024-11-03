@@ -282,13 +282,13 @@ instance Monoid Hand where
 {-# INLINE (<+^) #-}
 
 data Score
-  = High RankSet
-  | OnePair Rank RankSet
-  | TwoPair Rank Rank RankSet
-  | Trip Rank RankSet
-  | Straight Int
-  | Flush RankSet
-  | FullHouse Rank Rank
-  | Quad Rank RankSet
-  | StraightFlush Int
+  = High !RankSet
+  | OnePair !Rank !RankSet
+  | TwoPair !Rank !Rank !RankSet
+  | Trip !Rank !RankSet
+  | Straight !Int
+  | Flush !RankSet
+  | FullHouse !Rank !Rank
+  | Quad !Rank !RankSet
+  | StraightFlush !Int
   deriving (Show, Eq, Ord)
