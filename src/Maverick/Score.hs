@@ -7,7 +7,7 @@ import Data.Bits
   ( Bits
       ( clearBit,
         popCount,
-        shiftR,
+        unsafeShiftR,
         (.&.)
       ),
     FiniteBits (countTrailingZeros),
@@ -23,11 +23,11 @@ data Dups = Dups
 
 score :: Hand -> Score
 score h =
-  let rs = rankSet h.handSuitSet
-      rs' = rs `shiftR` 1
-      ds = countDups h
-      ms = findStraight rs
-      mf = findFlush h
+  let !rs = rankSet h.handSuitSet
+      !rs' = rs `unsafeShiftR` 1
+      !ds = countDups h
+      !ms = findStraight rs
+      !mf = findFlush h
    in case (mf, ms, ds) of
         (Just f, _, _)
           | Just s <- findStraight f -> StraightFlush s
@@ -35,7 +35,7 @@ score h =
           Quad r (clearTo 1 $ rs' `clearBit` fromEnum r)
         (_, _, Dups {t = r : _, p = s : _}) -> FullHouse r s
         (_, _, Dups {t = r : s : _b}) -> FullHouse r s
-        (Just f, _, _) -> Flush (clearTo 5 $ f `shiftR` 1)
+        (Just f, _, _) -> Flush (clearTo 5 $ f `unsafeShiftR` 1)
         (_, Just r, _) -> Straight r
         (_, _, Dups {t = r : _}) ->
           Trip r (clearTo 2 $ rs' `clearBit` fromEnum r)
@@ -57,7 +57,7 @@ findFlush h =
 
 findStraight :: RankSet -> Maybe Int
 findStraight (RankSet s) =
-  find (\r -> (s `shiftR` r) .&. straightMask == straightMask) [9, 8 .. 0]
+  find (\r -> (s `unsafeShiftR` r) .&. straightMask == straightMask) [9, 8 .. 0]
 
 countDups :: Hand -> Dups
 countDups h =
