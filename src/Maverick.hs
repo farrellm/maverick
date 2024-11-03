@@ -1,6 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Maverick (printEquityTable) where
+module Maverick
+  ( printEquityTable,
+    printEquityTable',
+  )
+where
 
 import Data.Text qualified as T
 import Data.Vector qualified as V
@@ -100,13 +104,29 @@ timesM cnt0 x = loop cnt0 mempty
           x' <- (acc <>) <$> x
           cnt' `seq` x' `seq` loop cnt' x'
 
-printEquityTable :: IO ()
-printEquityTable = do
+printEquityTable' :: IO ()
+printEquityTable' = do
   putStrLn "maverick"
   gen <- createSystemRandom
   usingReaderT gen $ do
     for_ hands $ \pocket -> do
       es <- traverse (calcEquity pocket) [1 .. 9]
       putText (T.intercalate " " (V.toList $ render <$> pocket))
+      putText " | "
+      putTextLn (T.intercalate " " (toText . flip (showFFloat (Just 2)) "" <$> es))
+
+printEquityTable :: IO ()
+printEquityTable = do
+  putStrLn "maverick"
+  gen <- createSystemRandom
+  usingReaderT gen $ do
+    let c2s = (`card` Heart) <$> universe
+    putTextLn (T.intercalate "   " $ "   |" : (render <$> c2s))
+    for_ universe $ \r1 -> do
+      let c1 = card r1 Spade
+      es <- forM c2s $ \c2 -> do
+        let pocket = V.fromList [c1, c2]
+        calcEquity pocket 7
+      putText (render c1)
       putText " | "
       putTextLn (T.intercalate " " (toText . flip (showFFloat (Just 2)) "" <$> es))
