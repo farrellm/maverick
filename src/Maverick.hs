@@ -93,9 +93,12 @@ calcEquity cs n = do
 timesM :: (Monoid m, Monad f) => Int -> f m -> f m
 timesM cnt0 x = loop cnt0 mempty
   where
-    loop !cnt !acc
+    loop cnt acc
       | cnt <= 0 = pure acc
-      | otherwise = x >>= loop (cnt - 1) . (acc <>)
+      | otherwise = do
+          let cnt' = cnt - 1
+          x' <- (acc <>) <$> x
+          cnt' `seq` x' `seq` loop cnt' x'
 
 printEquityTable :: IO ()
 printEquityTable = do
