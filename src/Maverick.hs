@@ -17,9 +17,7 @@ import Numeric (showFFloat)
 import System.Random.MWC (GenIO, UniformRange (uniformRM), createSystemRandom)
 import Prelude hiding (ask, get, put)
 
-(<>^) :: (Monoid m, Applicative f) => f m -> f m -> f m
-(<>^) = liftA2 (<>)
-{-# INLINE (<>^) #-}
+type EquityIO = RWST (GenIO, IOVector Hand) (Sum Double) Int IO
 
 hands :: V.Vector (V.Vector Card)
 hands =
@@ -42,8 +40,6 @@ deck = V.fromList $ do
   suit <- universe
   rank <- universe
   pure (hand $ card rank suit)
-
-type EquityIO = RWST (GenIO, IOVector Hand) (Sum Double) Int IO
 
 drawCommunity :: EquityIO Hand
 drawCommunity = do

@@ -281,6 +281,10 @@ instance Monoid Hand where
 (<+^) = liftA2 (<+)
 {-# INLINE (<+^) #-}
 
+(<>^) :: (Monoid m, Applicative f) => f m -> f m -> f m
+(<>^) = liftA2 (<>)
+{-# INLINE (<>^) #-}
+
 data Score
   = High !RankSet
   | OnePair !Rank !RankSet
